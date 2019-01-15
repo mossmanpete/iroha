@@ -11,10 +11,13 @@
 #include <boost/range/adaptors.hpp>
 #include <boost/range/counting_range.hpp>
 #include <boost/range/numeric.hpp>
+
 #include "consensus/yac/impl/peer_orderer_impl.hpp"
 #include "consensus/yac/storage/yac_proposal_storage.hpp"
+
 #include "module/irohad/ametsuchi/ametsuchi_mocks.hpp"
-#include "module/irohad/consensus/yac/yac_mocks.hpp"
+#include "module/irohad/consensus/yac/yac_test_util.hpp"
+#include "module/shared_model/interface_mocks.hpp"
 
 using namespace boost::adaptors;
 using namespace iroha::ametsuchi;
