@@ -16,6 +16,7 @@
  */
 
 #include "main/impl/consensus_init.hpp"
+
 #include "consensus/yac/impl/peer_orderer_impl.hpp"
 #include "consensus/yac/impl/timer_impl.hpp"
 #include "consensus/yac/impl/yac_crypto_provider_impl.hpp"
@@ -23,6 +24,7 @@
 #include "consensus/yac/impl/yac_hash_provider_impl.hpp"
 #include "consensus/yac/storage/yac_proposal_storage.hpp"
 #include "consensus/yac/transport/impl/network_impl.hpp"
+#include "logger/logger_manager.hpp"
 
 namespace iroha {
   namespace consensus {
@@ -34,10 +36,12 @@ namespace iroha {
       }
 
       auto YacInit::createNetwork(
-          std::shared_ptr<
-              iroha::network::AsyncGrpcClient<google::protobuf::Empty>>
-              async_call) {
-        consensus_network = std::make_shared<NetworkImpl>(async_call);
+          std::shared_ptr<iroha::network::AsyncGrpcClient<
+              google::protobuf::Empty>> async_call,
+          const logger::LoggerManagerTreePtr &consensus_log_manager) {
+        consensus_network = std::make_shared<NetworkImpl>(
+            async_call,
+            consensus_log_manager->getChild("Network")->getLogger());
         return consensus_network;
       }
 
@@ -93,13 +97,15 @@ namespace iroha {
               iroha::network::AsyncGrpcClient<google::protobuf::Empty>>
               async_call,
           std::shared_ptr<shared_model::interface::CommonObjectsFactory>
-              common_objects_factory) {
+              common_objects_factory,
+          const logger::LoggerManagerTreePtr &consensus_log_manager) {
         return Yac::create(
-            YacVoteStorage(),
-            createNetwork(std::move(async_call)),
+            YacVoteStorage(consensus_log_manager->getChild("VoteStorage")),
+            createNetwork(std::move(async_call), consensus_log_manager),
             createCryptoProvider(keypair, std::move(common_objects_factory)),
             createTimer(delay_milliseconds),
-            initial_order);
+            initial_order,
+            consensus_log_manager->getChild("HashGate")->getLogger());
       }
 
       std::shared_ptr<YacGate> YacInit::initConsensusGate(
@@ -114,22 +120,26 @@ namespace iroha {
               iroha::network::AsyncGrpcClient<google::protobuf::Empty>>
               async_call,
           std::shared_ptr<shared_model::interface::CommonObjectsFactory>
-              common_objects_factory) {
+              common_objects_factory,
+          const logger::LoggerManagerTreePtr &consensus_log_manager) {
         auto peer_orderer = createPeerOrderer(peer_query_factory);
 
         auto yac = createYac(peer_orderer->getInitialOrdering().value(),
                              keypair,
                              vote_delay_milliseconds,
                              std::move(async_call),
-                             std::move(common_objects_factory));
+                             std::move(common_objects_factory),
+                             consensus_log_manager);
         consensus_network->subscribe(yac);
 
         auto hash_provider = createHashProvider();
-        return std::make_shared<YacGateImpl>(std::move(yac),
-                                             std::move(peer_orderer),
-                                             hash_provider,
-                                             block_creator,
-                                             std::move(consensus_result_cache));
+        return std::make_shared<YacGateImpl>(
+            std::move(yac),
+            std::move(peer_orderer),
+            hash_provider,
+            block_creator,
+            std::move(consensus_result_cache),
+            consensus_log_manager->getChild("Gate")->getLogger());
       }
     }  // namespace yac
   }    // namespace consensus

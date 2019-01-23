@@ -19,8 +19,6 @@
 #define IROHA_CONSENSUS_INIT_HPP
 
 #include <memory>
-#include <string>
-#include <vector>
 
 #include "ametsuchi/peer_query_factory.hpp"
 #include "consensus/consensus_block_cache.hpp"
@@ -33,6 +31,7 @@
 #include "consensus/yac/yac_peer_orderer.hpp"
 #include "cryptography/keypair.hpp"
 #include "interfaces/common_objects/common_objects_factory.hpp"
+#include "logger/logger_manager_fwd.hpp"
 #include "network/block_loader.hpp"
 #include "simulator/block_creator.hpp"
 
@@ -47,8 +46,10 @@ namespace iroha {
         auto createPeerOrderer(
             std::shared_ptr<ametsuchi::PeerQueryFactory> peer_query_factory);
 
-        auto createNetwork(std::shared_ptr<iroha::network::AsyncGrpcClient<
-                               google::protobuf::Empty>> async_call);
+        auto createNetwork(
+            std::shared_ptr<iroha::network::AsyncGrpcClient<
+                google::protobuf::Empty>> async_call,
+            const logger::LoggerManagerTreePtr &consensus_log_manager);
 
         auto createCryptoProvider(
             const shared_model::crypto::Keypair &keypair,
@@ -67,7 +68,8 @@ namespace iroha {
                 iroha::network::AsyncGrpcClient<google::protobuf::Empty>>
                 async_call,
             std::shared_ptr<shared_model::interface::CommonObjectsFactory>
-                common_objects_factory);
+                common_objects_factory,
+            const logger::LoggerManagerTreePtr &consensus_log_manager);
 
        public:
         std::shared_ptr<YacGate> initConsensusGate(
@@ -81,7 +83,8 @@ namespace iroha {
                 iroha::network::AsyncGrpcClient<google::protobuf::Empty>>
                 async_call,
             std::shared_ptr<shared_model::interface::CommonObjectsFactory>
-                common_objects_factory);
+                common_objects_factory,
+            const logger::LoggerManagerTreePtr &consensus_log_manager);
 
         std::shared_ptr<NetworkImpl> consensus_network;
       };

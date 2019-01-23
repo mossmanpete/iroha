@@ -31,6 +31,7 @@ add_library(application
     )
 target_link_libraries(application
     logger
+    logger_manager
     yac
     yac_transport
     server_runner
@@ -63,10 +64,14 @@ target_link_libraries(irohad
     keys_manager
     common
     iroha_conf_loader
+    logger
+    logger_manager
     )
 
 add_library(iroha_conf_loader iroha_conf_loader.cpp)
-target_link_libraries(iroha_conf_loader iroha_conf_literals)
+target_link_libraries(iroha_conf_loader
+  iroha_conf_literals
+  logger_manager)
 
 add_library(iroha_conf_literals iroha_conf_literals.cpp)
 target_include_directories(iroha_conf_literals PUBLIC ${fmt_INCLUDE_DIR})

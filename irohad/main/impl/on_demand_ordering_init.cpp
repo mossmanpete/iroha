@@ -11,6 +11,8 @@
 #include "datetime/time.hpp"
 #include "interfaces/common_objects/peer.hpp"
 #include "interfaces/common_objects/types.hpp"
+#include "logger/logger.hpp"
+#include "logger/logger_manager.hpp"
 #include "ordering/impl/on_demand_common.hpp"
 #include "ordering/impl/on_demand_connection_manager.hpp"
 #include "ordering/impl/on_demand_ordering_gate.hpp"
@@ -41,14 +43,19 @@ namespace {
 namespace iroha {
   namespace network {
 
+    OnDemandOrderingInit::OnDemandOrderingInit(logger::LoggerPtr log)
+        : log_(std::move(log)) {}
+
     auto OnDemandOrderingInit::createNotificationFactory(
         std::shared_ptr<network::AsyncGrpcClient<google::protobuf::Empty>>
             async_call,
-        std::chrono::milliseconds delay) {
+        std::chrono::milliseconds delay,
+        const logger::LoggerManagerTreePtr &ordering_log_manager) {
       return std::make_shared<ordering::transport::OnDemandOsClientGrpcFactory>(
           std::move(async_call),
           [] { return std::chrono::system_clock::now(); },
-          delay);
+          delay,
+          ordering_log_manager->getChild("NetworkClient")->getLogger());
     }
 
     auto OnDemandOrderingInit::createConnectionManager(
@@ -56,7 +63,8 @@ namespace iroha {
         std::shared_ptr<network::AsyncGrpcClient<google::protobuf::Empty>>
             async_call,
         std::chrono::milliseconds delay,
-        std::vector<shared_model::interface::types::HashType> initial_hashes) {
+        std::vector<shared_model::interface::types::HashType> initial_hashes,
+        const logger::LoggerManagerTreePtr &ordering_log_manager) {
       // since top block will be the first in notifier observable, hashes of
       // two previous blocks are prepended
       const size_t kBeforePreviousTop = 0, kPreviousTop = 1;
@@ -174,7 +182,10 @@ namespace iroha {
                        .map(map_peers);
 
       return std::make_shared<ordering::OnDemandConnectionManager>(
-          createNotificationFactory(std::move(async_call), delay), peers);
+          createNotificationFactory(
+              std::move(async_call), delay, ordering_log_manager),
+          peers,
+          ordering_log_manager->getChild("ConnectionManager")->getLogger());
     }
 
     auto OnDemandOrderingInit::createGate(
@@ -186,8 +197,8 @@ namespace iroha {
         std::shared_ptr<ametsuchi::TxPresenceCache> tx_cache,
         consensus::Round initial_round,
         std::function<std::chrono::seconds(
-            const synchronizer::SynchronizationEvent &)> delay_func) {
-
+            const synchronizer::SynchronizationEvent &)> delay_func,
+        const logger::LoggerManagerTreePtr &ordering_log_manager) {
       auto map = [](auto commit) {
         return matchEvent(
             commit,
@@ -230,16 +241,21 @@ namespace iroha {
           std::move(cache),
           std::move(proposal_factory),
           std::move(tx_cache),
-          initial_round);
+          initial_round,
+          ordering_log_manager->getChild("Gate")->getLogger());
     }
 
     auto OnDemandOrderingInit::createService(
         size_t max_size,
         std::shared_ptr<shared_model::interface::UnsafeProposalFactory>
             proposal_factory,
-        std::shared_ptr<ametsuchi::TxPresenceCache> tx_cache) {
+        std::shared_ptr<ametsuchi::TxPresenceCache> tx_cache,
+        const logger::LoggerManagerTreePtr &ordering_log_manager) {
       return std::make_shared<ordering::OnDemandOrderingServiceImpl>(
-          max_size, std::move(proposal_factory), std::move(tx_cache));
+          max_size,
+          std::move(proposal_factory),
+          std::move(tx_cache),
+          ordering_log_manager->getChild("Service")->getLogger());
     }
 
     OnDemandOrderingInit::~OnDemandOrderingInit() {
@@ -266,24 +282,29 @@ namespace iroha {
         std::shared_ptr<ametsuchi::TxPresenceCache> tx_cache,
         consensus::Round initial_round,
         std::function<std::chrono::seconds(
-            const synchronizer::SynchronizationEvent &)> delay_func) {
-      auto ordering_service =
-          createService(max_size, proposal_factory, tx_cache);
+            const synchronizer::SynchronizationEvent &)> delay_func,
+        logger::LoggerManagerTreePtr ordering_log_manager) {
+      auto ordering_service = createService(
+          max_size, proposal_factory, tx_cache, ordering_log_manager);
       service = std::make_shared<ordering::transport::OnDemandOsServerGrpc>(
           ordering_service,
           std::move(transaction_factory),
           std::move(batch_parser),
-          std::move(transaction_batch_factory));
+          std::move(transaction_batch_factory),
+          ordering_log_manager->getChild("Server")->getLogger());
+      auto conn_mgr = createConnectionManager(std::move(peer_query_factory),
+                                              std::move(async_call),
+                                              delay,
+                                              std::move(initial_hashes),
+                                              ordering_log_manager);
       return createGate(ordering_service,
-                        createConnectionManager(std::move(peer_query_factory),
-                                                std::move(async_call),
-                                                delay,
-                                                std::move(initial_hashes)),
+                        std::move(conn_mgr),
                         std::make_shared<ordering::cache::OnDemandCache>(),
                         std::move(proposal_factory),
                         std::move(tx_cache),
                         initial_round,
-                        std::move(delay_func));
+                        std::move(delay_func),
+                        ordering_log_manager);
     }
 
   }  // namespace network

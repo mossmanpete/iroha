@@ -9,22 +9,27 @@
 #include "interfaces/common_objects/peer.hpp"
 #include "interfaces/common_objects/types.hpp"
 #include "interfaces/iroha_internal/block.hpp"
+#include "logger/logger.hpp"
 
 namespace iroha {
   namespace network {
+    OrderingInit::OrderingInit(logger::LoggerPtr log)
+        : log_(std::move(log)) {}
+
     auto OrderingInit::createGate(
         std::shared_ptr<OrderingGateTransport> transport,
-        std::shared_ptr<ametsuchi::BlockQueryFactory> block_query_factory) {
+        std::shared_ptr<ametsuchi::BlockQueryFactory> block_query_factory,
+        logger::LoggerPtr gate_log) {
       return block_query_factory->createBlockQuery() |
-          [this, &transport](const auto &block_query) {
+          [this, &transport, &gate_log](const auto &block_query) {
             return block_query->getTopBlock().match(
-                [this, &transport](
+                [this, &transport, &gate_log](
                     expected::Value<
                         std::shared_ptr<shared_model::interface::Block>> &block)
                     -> std::shared_ptr<OrderingGate> {
                   const auto &height = block.value->height();
                   auto gate = std::make_shared<ordering::OrderingGateImpl>(
-                      transport, height);
+                      transport, height, std::move(gate_log));
                   log_->info("Creating Ordering Gate with initial height {}",
                              height);
                   transport->subscribe(gate);
@@ -66,7 +71,7 @@ namespace iroha {
         std::shared_ptr<shared_model::interface::TransactionBatchFactory>
             transaction_batch_factory,
         std::shared_ptr<network::AsyncGrpcClient<google::protobuf::Empty>>
-            async_call) {
+            async_call, logger::LoggerPtr gate_log) {
       auto query = peer_query_factory->createPeerQuery();
       if (not query or not query.get()) {
         log_->error("Cannot get the peer query");
@@ -91,7 +96,8 @@ namespace iroha {
                                        ordering_service_transport,
                                        persistent_state);
       ordering_service_transport->subscribe(ordering_service);
-      ordering_gate = createGate(ordering_gate_transport, block_query_factory);
+      ordering_gate =
+          createGate(ordering_gate_transport, block_query_factory, gate_log);
       return ordering_gate;
     }
   }  // namespace network

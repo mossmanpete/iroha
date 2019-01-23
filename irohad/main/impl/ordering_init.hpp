@@ -9,7 +9,7 @@
 #include "ametsuchi/block_query_factory.hpp"
 #include "ametsuchi/os_persistent_state_factory.hpp"
 #include "ametsuchi/peer_query_factory.hpp"
-#include "logger/logger.hpp"
+#include "logger/logger_fwd.hpp"
 #include "ordering/impl/ordering_gate_impl.hpp"
 #include "ordering/impl/ordering_gate_transport_grpc.hpp"
 #include "ordering/impl/ordering_service_transport_grpc.hpp"
@@ -59,6 +59,8 @@ namespace iroha {
               persistent_state);
 
      public:
+      OrderingInit(logger::LoggerPtr log);
+
       /**
        * Initialization of ordering gate(client) and ordering service (service)
        * @param peer_query_factory - factory to get peer list
@@ -82,7 +84,8 @@ namespace iroha {
           std::shared_ptr<shared_model::interface::TransactionBatchFactory>
               transaction_batch_factory,
           std::shared_ptr<network::AsyncGrpcClient<google::protobuf::Empty>>
-              async_call);
+              async_call,
+          logger::LoggerPtr gate_log);
 
       std::shared_ptr<ordering::SinglePeerOrderingService> ordering_service;
       std::shared_ptr<iroha::network::OrderingGate> ordering_gate;
@@ -92,7 +95,7 @@ namespace iroha {
           ordering_service_transport;
 
      protected:
-      logger::Logger log_ = logger::log("OrderingInit");
+      logger::LoggerPtr log_;
     };
   }  // namespace network
 }  // namespace iroha
